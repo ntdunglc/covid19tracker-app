@@ -7,8 +7,6 @@ import '../widgets/dialog.dart' as util;
 import 'package:latlong/latlong.dart';
 import '../geospatial.dart';
 
-const String MAP_TOKEN = 'pk.eyJ1IjoiY2hyaXN0b2NyYWN5IiwiYSI6ImVmM2Y2MDA1NzIyMjg1NTdhZGFlYmZiY2QyODVjNzI2In0.htaacx3ZhE5uAWN86-YNAQ';
-
 class MapView extends StatefulWidget {
   @override
   State createState() => MapViewState();
@@ -33,7 +31,7 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
   List<CircleMarker> _geofenceEventLocations = [];
   List<Polyline> _geofenceEventPolylines = [];
 
-  LatLng _center = new LatLng(51.5, -0.09);
+  LatLng _center = new LatLng(41.15, -96.50); // US
   MapController _mapController;
   MapOptions _mapOptions;
 
@@ -44,7 +42,6 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
         onPositionChanged: _onPositionChanged,
         center: _center,
         zoom: 16.0,
-        onLongPress: _onAddGeofence
     );
     _mapController = new MapController();
 
@@ -287,11 +284,8 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
       options: _mapOptions,
       layers: [
         new TileLayerOptions(
-          urlTemplate: "https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}@2x.png?access_token={accessToken}",
-          additionalOptions: {
-            'accessToken': MAP_TOKEN,
-            'id': 'mapbox.streets',
-          },
+          urlTemplate: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+          subdomains: ['a', 'b', 'c']
         ),
         new PolylineLayerOptions(
           polylines: [

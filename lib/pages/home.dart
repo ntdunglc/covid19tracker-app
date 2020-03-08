@@ -33,11 +33,6 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
   bool _isMoving;
   bool _enabled;
   String _motionActivity;
-  String _odometer;
-
-  /// My private test mode.  IGNORE.
-  int _testModeClicks;
-  Timer _testModeTimer;
 
   List<Event> events = [];
 
@@ -50,8 +45,6 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
     _isMoving = false;
     _enabled = false;
     _motionActivity = 'UNKNOWN';
-    _odometer = '0';
-    _testModeClicks = 0;
 
     _tabController = TabController(
         length: 2,
@@ -63,59 +56,28 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
     initPlatformState();
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    print("[home_view didChangeAppLifecycleState] : $state");
-    if (state == AppLifecycleState.paused) {
-
-    } else if (state == AppLifecycleState.resumed) {
-
-    }
-  }
-
   void initPlatformState() async {
-    // SharedPreferences prefs = await _prefs;
-    // String orgname = prefs.getString("orgname");
-    // String username = prefs.getString("username");
-
-    // // Sanity check orgname & username:  if invalid, go back to HomeApp to re-register device.
-    // if (orgname == null || username == null) {
-    //   return runApp(HomeApp());
-    // }
-
     _configureBackgroundGeolocation();
-    _configureBackgroundFetch();
   }
 
   void _configureBackgroundGeolocation() async {
-    // 1.  Listen to events (See docs for all 13 available events).
     bg.BackgroundGeolocation.onLocation(_onLocation, _onLocationError);
     bg.BackgroundGeolocation.onMotionChange(_onMotionChange);
     bg.BackgroundGeolocation.onActivityChange(_onActivityChange);
-    bg.BackgroundGeolocation.onProviderChange(_onProviderChange);
-    bg.BackgroundGeolocation.onHttp(_onHttp);
-    bg.BackgroundGeolocation.onConnectivityChange(_onConnectivityChange);
     bg.BackgroundGeolocation.onHeartbeat(_onHeartbeat);
-    bg.BackgroundGeolocation.onGeofence(_onGeofence);
-    bg.BackgroundGeolocation.onSchedule(_onSchedule);
-    bg.BackgroundGeolocation.onPowerSaveChange(_onPowerSaveChange);
     bg.BackgroundGeolocation.onEnabledChange(_onEnabledChange);
-    bg.BackgroundGeolocation.onNotificationAction(_onNotificationAction);
-
-    // 2.  Configure the plugin
+    
     bg.BackgroundGeolocation.ready(bg.Config(
-        // Convenience option to automatically configure the SDK to post to Transistor Demo server.
-        // transistorAuthorizationToken: token,
         // Logging & Debug
         reset: false,
         debug: true,
         logLevel: bg.Config.LOG_LEVEL_VERBOSE,
         // Geolocation options
-        desiredAccuracy: bg.Config.DESIRED_ACCURACY_NAVIGATION,
+        desiredAccuracy: bg.Config.DESIRED_ACCURACY_HIGH,
         distanceFilter: 10.0,
         stopTimeout: 1,
         // HTTP & Persistence
-        autoSync: true,
+        autoSync: false,
         // Application options
         stopOnTerminate: false,
         startOnBoot: true,
@@ -124,9 +86,6 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
     )).then((bg.State state) {
       print('[ready] ${state.toMap()}');
 
-      if (state.schedule.isNotEmpty) {
-        bg.BackgroundGeolocation.startSchedule();
-      }
       setState(() {
         _enabled = state.enabled;
         _isMoving = state.isMoving;
@@ -145,55 +104,6 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
         _tabController.animateTo(tabIndex);
       }
     });
-  }
-
-  // Configure BackgroundFetch (not required by BackgroundGeolocation).
-  void _configureBackgroundFetch() async {
-    BackgroundFetch.configure(BackgroundFetchConfig(
-        minimumFetchInterval: 15,
-        startOnBoot: true,
-        stopOnTerminate: false,
-        enableHeadless: true,
-        requiresStorageNotLow: false,
-        requiresBatteryNotLow: false,
-        requiresCharging: false,
-        requiresDeviceIdle: false,
-        requiredNetworkType: NetworkType.NONE
-    ), (String taskId) async {
-      print("[BackgroundFetch] received event $taskId");
-
-      SharedPreferences prefs = await SharedPreferences.getInstance();
-      int count = 0;
-      if (prefs.get("fetch-count") != null) {
-        count = prefs.getInt("fetch-count");
-      }
-      prefs.setInt("fetch-count", ++count);
-      print('[BackgroundFetch] count: $count');
-
-      if (taskId == 'flutter_background_fetch') {
-        // Test scheduling a custom-task in fetch event.
-        BackgroundFetch.scheduleTask(TaskConfig(
-            taskId: "com.transistorsoft.customtask",
-            delay: 5000,
-            periodic: false,
-            forceAlarmManager: true,
-            stopOnTerminate: false,
-            enableHeadless: true
-        ));
-      }
-      BackgroundFetch.finish(taskId);
-    });
-
-    // Test scheduling a custom-task.
-    BackgroundFetch.scheduleTask(TaskConfig(
-        taskId: "com.transistorsoft.customtask",
-        delay: 10000,
-        periodic: false,
-        forceAlarmManager: true,
-        stopOnTerminate: false,
-        enableHeadless: true
-    ));
-
   }
 
   void _onClickEnable(enabled) async {
@@ -224,23 +134,6 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
     }
   }
 
-  // Manually toggle the tracking state:  moving vs stationary
-  void _onClickChangePace() {
-    setState(() {
-      _isMoving = !_isMoving;
-    });
-    print("[onClickChangePace] -> $_isMoving");
-
-    bg.BackgroundGeolocation.changePace(_isMoving).then((bool isMoving) {
-      print('[changePace] success $isMoving');
-    }).catchError((e) {
-      print('[changePace] ERROR: ' + e.code.toString());
-    });
-
-    if (!_isMoving) {
-    }
-  }
-
   // Manually fetch the current position.
   void _onClickGetCurrentPosition() async {
     bg.BackgroundGeolocation.playSound(util.Dialog.getSoundId("BUTTON_CLICK"));
@@ -257,14 +150,13 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
     }).catchError((error) {
       print('[getCurrentPosition] ERROR: $error');
     });
-  }
 
-  // Go back to HomeApp
-  void _onClickHome() {
-    // bg.BackgroundGeolocation.playSound(util.Dialog.getSoundId("CLOSE"));
-    // bg.BackgroundGeolocation.stop();
-    // bg.BackgroundGeolocation.removeListeners();
-    // runApp(HomeApp());
+    // force tracking, we know there is user interaction
+    bg.BackgroundGeolocation.changePace(true).then((bool isMoving) { 
+      print('[changePace] success $isMoving');
+    }).catchError((e) {
+      print('[changePace] ERROR: ' + e.code.toString());
+    });
   }
 
   ////
@@ -276,7 +168,6 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
 
     setState(() {
       events.insert(0, Event(bg.Event.LOCATION, location, location.toString(compact: true)));
-      _odometer = (location.odometer / 1000.0).toStringAsFixed(1);
     });
   }
 
@@ -303,63 +194,10 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
     });
   }
 
-  void _onProviderChange(bg.ProviderChangeEvent event) {
-    print('[${bg.Event.PROVIDERCHANGE}] - $event');
-    setState(() {
-      events.insert(0, Event(bg.Event.PROVIDERCHANGE, event, event.toString()));
-    });
-  }
-
-  void _onHttp(bg.HttpEvent event) async {
-    print('[${bg.Event.HTTP}] - $event');
-
-    setState(() {
-      events.insert(0, Event(bg.Event.HTTP, event, event.toString()));
-    });
-  }
-
-  void _onConnectivityChange(bg.ConnectivityChangeEvent event) {
-    print('[${bg.Event.CONNECTIVITYCHANGE}] - $event');
-    setState(() {
-      events.insert(0, Event(bg.Event.CONNECTIVITYCHANGE, event, event.toString()));
-    });
-  }
-
   void _onHeartbeat(bg.HeartbeatEvent event) {
     print('[${bg.Event.HEARTBEAT}] - $event');
     setState(() {
       events.insert(0, Event(bg.Event.HEARTBEAT, event, event.toString()));
-    });
-  }
-
-  void _onGeofence(bg.GeofenceEvent event) async {
-    print('[${bg.Event.GEOFENCE}] - $event');
-
-    bg.BackgroundGeolocation.startBackgroundTask().then((int taskId) async {
-      // Execute an HTTP request to test an async operation completes.
-      // String url = "${ENV.TRACKER_HOST}/api/devices";
-      // bg.State state = await bg.BackgroundGeolocation.state;
-      // http.read(url, headers: {
-      //   "Authorization": "Bearer ${state.authorization.accessToken}"
-      // }).then((String result) {
-      //   print("[http test] success: $result");
-      //   bg.BackgroundGeolocation.playSound(util.Dialog.getSoundId("TEST_MODE_CLICK"));
-      //   bg.BackgroundGeolocation.stopBackgroundTask(taskId);
-      // }).catchError((dynamic error) {
-      //   print("[http test] failed: $error");
-      //   bg.BackgroundGeolocation.stopBackgroundTask(taskId);
-      // });
-    });
-
-    setState(() {
-      events.insert(0, Event(bg.Event.GEOFENCE, event, event.toString(compact: false)));
-    });
-  }
-
-  void _onSchedule(bg.State state) {
-    print('[${bg.Event.SCHEDULE}] - $state');
-    setState(() {
-      events.insert(0, Event(bg.Event.SCHEDULE, state, "enabled: ${state.enabled}"));
     });
   }
 
@@ -372,31 +210,25 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
     });
   }
 
-  void _onNotificationAction(String action) {
-    print('[onNotificationAction] $action');
-    switch(action) {
-      case 'notificationButtonFoo':
-        bg.BackgroundGeolocation.changePace(false);
-        break;
-      case 'notificationButtonBar':
-        break;
-    }
-  }
+  void _onClickShareLog() async {
+    util.Dialog.alert(context, 'Preparing log', 'The log will be processed in the background (it can take some time depending on the size of the log).  Your share screen will launch when ready.');
 
-  void _onPowerSaveChange(bool enabled) {
-    print('[${bg.Event.POWERSAVECHANGE}] - $enabled');
-    setState(() {
-      events.insert(0, Event(bg.Event.POWERSAVECHANGE, enabled, 'Power-saving enabled: $enabled'));
+    bg.Logger.emailLog("").then((bool success) {
+      print('[emailLog] success');
+    }).catchError((error) {
+      util.Dialog.alert(context, 'Email log Error', error.toString());
     });
   }
-
+  void _onClickHelp() async {
+  }
+  
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-          title: const Text('BG Geo'),
+          title: const Text('COVID-19 Tracker'),
+          leading: IconButton(onPressed: _onClickHelp, icon: Icon(Icons.help_outline, color: Colors.black)),
           centerTitle: true,
-          leading: IconButton(onPressed: _onClickHome, icon: Icon(Icons.home, color: Colors.black)),
           backgroundColor: Theme.of(context).bottomAppBarColor,
           brightness: Brightness.light,
           actions: <Widget>[
@@ -435,29 +267,15 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
                       icon: Icon(Icons.gps_fixed),
                       onPressed: _onClickGetCurrentPosition,
                     ),
+                    IconButton(
+                      icon: Icon(Icons.share),
+                      onPressed: _onClickShareLog,
+                    ),
                   ]
               )
           )
       ),
     );
-  }
-
-  /// My private field-test setup.
-  /// @private IGNORE.
-  void _onClickTestMode() {
-    // _testModeClicks++;
-
-    // bg.BackgroundGeolocation.playSound(util.Dialog.getSoundId("TEST_MODE_CLICK"));
-    // if (_testModeClicks == 10) {
-    //   bg.BackgroundGeolocation.playSound(util.Dialog.getSoundId("TEST_MODE_SUCCESS"));
-    //   Test.applyTestConfig();
-    // }
-    // if (_testModeTimer != null) {
-    //   _testModeTimer.cancel();
-    // }
-    // _testModeTimer = new Timer(Duration(seconds: 2), () {
-    //   _testModeClicks = 0;
-    // });
   }
 
   @override

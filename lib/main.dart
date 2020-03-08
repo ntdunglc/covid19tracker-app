@@ -35,8 +35,7 @@ class MyApp extends StatelessWidget {
           )
       ),
       home: Scaffold(
-          body: HomePage(),
-          floatingActionButton: MainMenuButton()
+          body: HomePage()
       )
     );
   }
