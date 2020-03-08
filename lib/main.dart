@@ -3,7 +3,6 @@ import 'package:flutter_background_geolocation/flutter_background_geolocation.da
 import 'package:background_fetch/background_fetch.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'config/env.dart';
-import './widgets/main_menu_button.dart';
 import './pages/home.dart';
 
 void main() {
