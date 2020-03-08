@@ -9,7 +9,7 @@ Drawer buildDrawer(BuildContext context, String currentRoute) {
       children: <Widget>[
         const DrawerHeader(
           child: Center(
-            child: Text('Convid-19 Tracker'),
+            child: Text('Covid-19 Tracker'),
           ),
         ),
         ListTile(
