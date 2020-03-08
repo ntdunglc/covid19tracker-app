@@ -1,35 +1,43 @@
 import 'package:flutter/material.dart';
-import './pages/home.dart';
-import './pages/my_health.dart';
 import 'package:flutter_background_geolocation/flutter_background_geolocation.dart' as bg;
+import 'package:background_fetch/background_fetch.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'config/env.dart';
+import './widgets/main_menu_button.dart';
+import './pages/home.dart';
 
 void main() {
   runApp(MyApp());
   bg.BackgroundGeolocation.registerHeadlessTask(headlessTask);
+  BackgroundFetch.registerHeadlessTask(backgroundFetchHeadlessTask);
 }
 
 class MyApp extends StatelessWidget {
   // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Covid-19 Tracker',
-      // theme: ThemeData(
-      //   // This is the theme of your application.
-      //   //
-      //   // Try running your application with "flutter run". You'll see the
-      //   // application has a blue toolbar. Then, without quitting the app, try
-      //   // changing the primarySwatch below to Colors.green and then invoke
-      //   // "hot reload" (press "r" in the console where you ran "flutter run",
-      //   // or simply save your changes to "hot reload" in a Flutter IDE).
-      //   // Notice that the counter didn't reset back to zero; the application
-      //   // is not restarted.
-      //   primarySwatch: Colors.blue,
-      // ),
-      home: HomePage(),
-      routes: <String, WidgetBuilder>{
-        MyHealthPage.route: (context) => MyHealthPage(),
-      },
+    // return new MaterialApp(
+    //   home: Scaffold(
+    //       body: HomePage(),
+    //       floatingActionButton: MainMenuButton()
+    //   )
+    // );
+    return new MaterialApp(
+      title: 'COVID-19 Tracker',
+      theme: Theme.of(context).copyWith(
+          // accentColor: Colors.black,
+          // bottomAppBarColor: Colors.lightBlue,
+          primaryTextTheme: Theme
+              .of(context)
+              .primaryTextTheme
+              .apply(
+            bodyColor: Colors.black,
+          )
+      ),
+      home: Scaffold(
+          body: HomePage(),
+          floatingActionButton: MainMenuButton()
+      )
     );
   }
 }
@@ -88,4 +96,22 @@ void headlessTask(bg.HeadlessEvent headlessEvent) async {
       print('EnabledChangeEvent: $enabled');
       break;
   }
+}
+
+
+/// Receive events from BackgroundFetch in Headless state.
+void backgroundFetchHeadlessTask(String taskId) async {
+  // Get current-position from BackgroundGeolocation in headless mode.
+  //bg.Location location = await bg.BackgroundGeolocation.getCurrentPosition(samples: 1);
+  print("[BackgroundFetch] HeadlessTask: $taskId");
+
+  SharedPreferences prefs = await SharedPreferences.getInstance();
+  int count = 0;
+  if (prefs.get("fetch-count") != null) {
+    count = prefs.getInt("fetch-count");
+  }
+  prefs.setInt("fetch-count", ++count);
+  print('[BackgroundFetch] count: $count');
+
+  BackgroundFetch.finish(taskId);
 }
