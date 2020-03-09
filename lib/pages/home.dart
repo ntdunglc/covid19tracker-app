@@ -4,16 +4,10 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_background_geolocation/flutter_background_geolocation.dart' as bg;
-import 'package:background_fetch/background_fetch.dart';
-import 'package:http/http.dart' as http;
 
-// import '../app.dart';
-import '../config/env.dart';
 import 'map_view.dart';
 import 'event_list.dart';
 import '../widgets/dialog.dart' as util;
-// import './util/test.dart';
-
 import '../shared_events.dart';
 
 // For pretty-printing location JSON
@@ -34,7 +28,7 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
   bool _enabled;
   String _motionActivity;
 
-  List<Event> events = [];
+  EventStore eventStore = EventStore.instance();
 
   @override
   void initState() {
@@ -63,7 +57,6 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
   void _configureBackgroundGeolocation() async {
     bg.BackgroundGeolocation.onLocation(_onLocation, _onLocationError);
     bg.BackgroundGeolocation.onMotionChange(_onMotionChange);
-    bg.BackgroundGeolocation.onActivityChange(_onActivityChange);
     bg.BackgroundGeolocation.onHeartbeat(_onHeartbeat);
     bg.BackgroundGeolocation.onEnabledChange(_onEnabledChange);
     
@@ -82,7 +75,7 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
         stopOnTerminate: false,
         startOnBoot: true,
         enableHeadless: true,
-        heartbeatInterval: 60
+        heartbeatInterval: 300
     )).then((bg.State state) {
       print('[ready] ${state.toMap()}');
 
@@ -96,6 +89,7 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
 
     // Fetch currently selected tab.
     SharedPreferences prefs = await _prefs;
+    
     int tabIndex = prefs.getInt("tabIndex");
 
     // Which tab to view?  MapView || EventList.   Must wait until after build before switching tab or bad things happen.
@@ -141,9 +135,7 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
     bg.BackgroundGeolocation.getCurrentPosition(
         desiredAccuracy: 40, // <-- desire an accuracy of 40 meters or less
         maximumAge: 10000,   // <-- Up to 10s old is fine.
-        timeout: 30,         // <-- wait 30s before giving up.
-        samples: 3,           // <-- sample just 1 location
-        extras: {"getCurrentPosition": true}
+        timeout: 30,
     ).then((bg.Location location) {
       print('[getCurrentPosition] - $location');
     }).catchError((error) {
@@ -166,37 +158,29 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
     print('[${bg.Event.LOCATION}] - $location');
 
     setState(() {
-      events.insert(0, Event(bg.Event.LOCATION, location, location.toString(compact: true)));
+      eventStore.insertEvent(Event(location.timestamp, bg.Event.LOCATION, location.coords.latitude, location.coords.longitude, location.toString(compact: true)));
     });
   }
 
   void _onLocationError(bg.LocationError error) {
     print('[${bg.Event.LOCATION}] ERROR - $error');
     setState(() {
-      events.insert(0, Event(bg.Event.LOCATION + " error", error, error.toString()));
+      eventStore.insertEvent(Event(toEventDateTimeFormat(DateTime.now()), bg.Event.LOCATION + " error", -1, -1, error.toString()));
     });
   }
 
   void _onMotionChange(bg.Location location) {
     print('[${bg.Event.MOTIONCHANGE}] - $location');
     setState(() {
-      events.insert(0, Event(bg.Event.MOTIONCHANGE, location, location.toString(compact:true)));
+      eventStore.insertEvent(Event(location.timestamp, bg.Event.MOTIONCHANGE, location.coords.latitude, location.coords.longitude, location.toString(compact:true)));
       _isMoving = location.isMoving;
-    });
-  }
-
-  void _onActivityChange(bg.ActivityChangeEvent event) {
-    print('[${bg.Event.ACTIVITYCHANGE}] - $event');
-    setState(() {
-      events.insert(0, Event(bg.Event.ACTIVITYCHANGE, event, event.toString()));
-      _motionActivity = event.activity;
     });
   }
 
   void _onHeartbeat(bg.HeartbeatEvent event) {
     print('[${bg.Event.HEARTBEAT}] - $event');
     setState(() {
-      events.insert(0, Event(bg.Event.HEARTBEAT, event, event.toString()));
+      eventStore.insertEvent(Event(event.location.timestamp, bg.Event.HEARTBEAT, event.location.coords.latitude, event.location.coords.longitude, event.toString()));
     });
   }
 
@@ -204,8 +188,7 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
     print('[${bg.Event.ENABLEDCHANGE}] - $enabled');
     setState(() {
       _enabled = enabled;
-      events.clear();
-      events.insert(0, Event(bg.Event.ENABLEDCHANGE, enabled, '[EnabledChangeEvent enabled: $enabled]'));
+      eventStore.insertEvent(Event(toEventDateTimeFormat(DateTime.now()), bg.Event.ENABLEDCHANGE, -1, -1, '[EnabledChangeEvent enabled: $enabled]'));
     });
   }
 
@@ -245,7 +228,7 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
       ),
       //body: body,
       body: SharedEvents(
-          events: events,
+          eventStore: eventStore,
           child: TabBarView(
               controller: _tabController,
               children: [

@@ -169,11 +169,11 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
           ],
         ),
         // disable these options for now
-        // Polyline joining last stationary location to motionchange:true location.
+        // // Polyline joining last stationary location to motionchange:true location.
         // new PolylineLayerOptions(polylines: _motionChangePolylines),
-        // Recorded locations.
+        // // Recorded locations.
         // new CircleLayerOptions(circles: _locations),
-        // Small, red circles showing where motionchange:false events fired.
+        // // Small, red circles showing where motionchange:false events fired.
         // new CircleLayerOptions(circles: _stopLocations),
         new CircleLayerOptions(circles: _currentPosition),
       ],
