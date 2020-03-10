@@ -46,7 +46,11 @@ class EventStore {
   static EventStore instance() {
     return _instance;
   }
-  
+
+  List<Event> get locationEvents {
+    return events.where((e) => e.lat != -1).toList();;
+  }
+
   /// Open the database.
   Future open() async {
     print("[EventStore] opening db");

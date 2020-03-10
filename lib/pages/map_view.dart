@@ -3,6 +3,20 @@ import 'package:flutter_background_geolocation/flutter_background_geolocation.da
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map/plugin_api.dart';
 import 'package:latlong/latlong.dart';
+import 'package:http/http.dart' as http;
+import 'package:csv/csv.dart';
+
+var covid19_github_url = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/03-09-2020.csv';
+class GithubCaseEvent {
+  String locationName;
+  String timestamp;
+  int confirmed;
+  int deaths;
+  int recovered;
+  double lat;
+  double lng;
+  GithubCaseEvent(this.locationName, this.timestamp, this.confirmed, this.deaths, this.recovered, this.lat, this.lng);
+}
 
 class MapView extends StatefulWidget {
   @override
@@ -21,6 +35,7 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
   List<CircleMarker> _stopLocations = [];
   List<Polyline> _motionChangePolylines = [];
 
+  List<CircleMarker> _caseLocations = [];
 
   LatLng _center = new LatLng(41.15, -96.50); // US
   MapController _mapController;
@@ -29,6 +44,7 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
   @override
   void initState() {
     super.initState();
+    fetchGithubData();
     _mapOptions = new MapOptions(
         onPositionChanged: _onPositionChanged,
         center: _center,
@@ -44,11 +60,44 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
     ).then((bg.Location location) {
       // force set zoom on startup
       LatLng ll = new LatLng(location.coords.latitude, location.coords.longitude);
-      _mapController.move(ll, 11.0);
+      _mapController.move(ll, 10.0);
       print('[getCurrentPosition] - $location');
     }).catchError((error) {
       print('[getCurrentPosition] ERROR: $error');
     });
+  }
+
+  void fetchGithubData() async {
+    var response = await http.get(covid19_github_url);
+    if(response.statusCode == 200) {
+      List<List<dynamic>> rowsAsListOfValues = const CsvToListConverter().convert(response.body.replaceAll("\n", "\r\n"));
+      print("rowsAsListOfValues ${rowsAsListOfValues.length}");
+      List<GithubCaseEvent> cases = rowsAsListOfValues.map((columns) {
+        try{
+          String locationName = columns[1];
+          if(columns[0].toString().isNotEmpty){
+            locationName = [columns[0], columns[1]].join(", ");
+          }
+          return GithubCaseEvent(locationName, columns[2], columns[3], columns[4], columns[5], columns[6], columns[7]);   
+        } catch (error) {
+          print(error);
+          return null;
+        }
+      })
+      .where((c) => c != null)
+      .toList();
+      setState(() {
+        cases.forEach((c) {
+          LatLng ll = new LatLng(c.lat, c.lng);
+          _caseLocations.add(CircleMarker(
+            point: ll,
+            color: Colors.red.withOpacity(0.5),
+            radius: 5, // c.deaths * 1.0
+          ));
+        });
+      });
+      
+    }
   }
 
   void _onEnabledChange(bool enabled) {
@@ -176,6 +225,7 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
         // // Small, red circles showing where motionchange:false events fired.
         // new CircleLayerOptions(circles: _stopLocations),
         new CircleLayerOptions(circles: _currentPosition),
+        new CircleLayerOptions(circles: _caseLocations),
       ],
     );
   }

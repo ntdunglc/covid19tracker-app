@@ -45,8 +45,7 @@ class EventListState extends State<EventList> with AutomaticKeepAliveClientMixin
     DateTime filterTimeStamp;
     switch (idx) {
       case 0:
-        // filterTimeStamp = today.subtract(new Duration(hours: 24));
-        filterTimeStamp = today.subtract(new Duration(minutes: 30));
+        filterTimeStamp = today.subtract(new Duration(hours: 24));
         break;
       case 1:
         filterTimeStamp = today.subtract(new Duration(days: 7));
@@ -103,11 +102,11 @@ class EventListState extends State<EventList> with AutomaticKeepAliveClientMixin
             Expanded(
               child: ListView.builder(
               padding: const EdgeInsets.all(0.0),
-              itemCount: eventStore.events.length,
+              itemCount: eventStore.locationEvents.length,
               itemBuilder: /*1*/ (context, index) {
-                final event = eventStore.events[index];
+                final event = eventStore.locationEvents[index];
                 return ListTile(
-                  title: Text("${event.timestamp},${event.lat},${event.lng},${event.eventType}"),
+                  title: Text("${event.timestamp},${event.lat},${event.lng}"),
                 );
               })
             )

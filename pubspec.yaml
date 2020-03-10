@@ -1,5 +1,5 @@
 name: covid19tracker
-description: A new Flutter project.
+description: An local-first application to help user self-track their travel history, and optionally use this data to support community
 
 # The following defines the version and build number for your application.
 # A version number is three numbers separated by dots, like 1.2.43
@@ -27,6 +27,10 @@ dependencies:
   sqflite: ^1.2.2
   flutter_background_geolocation: '^1.3.2'
   shared_preferences: ^0.5.6
+  flutter_share: ^1.0.2
+  archive : ^2.0.11
+  http: ^0.12.0
+  csv: ^4.0.1
 
 dev_dependencies:
   flutter_test:

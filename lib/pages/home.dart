@@ -4,11 +4,17 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_background_geolocation/flutter_background_geolocation.dart' as bg;
+import 'package:flutter/services.dart';
+import 'package:flutter_share/flutter_share.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 
 import 'map_view.dart';
 import 'event_list.dart';
 import '../widgets/dialog.dart' as util;
 import '../shared_events.dart';
+import 'package:archive/archive.dart';
+import 'package:archive/archive_io.dart';
 
 // For pretty-printing location JSON
 JsonEncoder encoder = new JsonEncoder.withIndent("     ");
@@ -27,6 +33,7 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
   bool _isMoving;
   bool _enabled;
   String _motionActivity;
+  bool _isLoadingFile = false;
 
   EventStore eventStore = EventStore.instance();
 
@@ -193,13 +200,31 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
   }
 
   void _onClickShareLog() async {
-    util.Dialog.alert(context, 'Preparing log', 'The log will be processed in the background (it can take some time depending on the size of the log).  Your share screen will launch when ready.');
+    if(_isLoadingFile){
+      return;
+    }
+    try {
+      _isLoadingFile = true;
+      final directory = await getExternalStorageDirectory();
+      File localFile = File('${directory.path}/covid19tracker_locations.txt');
+      String data = eventStore.locationEvents
+        .map((event) => "${event.timestamp},${event.lat},${event.lng}")
+        .join("\n");
+      await localFile.writeAsString(data);
 
-    bg.Logger.emailLog("").then((bool success) {
-      print('[emailLog] success');
-    }).catchError((error) {
-      util.Dialog.alert(context, 'Email log Error', error.toString());
-    });
+      var encoder = ZipFileEncoder();
+      encoder.create('${directory.path}/covid19tracker_locations.zip');
+      encoder.addFile(localFile);
+      encoder.close();
+
+      await FlutterShare.shareFile(
+        title: 'Covid 19 Tracker Location Data',
+        filePath: '${directory.path}/covid19tracker_locations.zip',
+      );
+    } catch (error) {
+      print("error sharing log $error");
+    }
+    _isLoadingFile = false;
   }
   void _onClickHelp() async {
   }
