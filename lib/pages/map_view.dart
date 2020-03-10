@@ -6,7 +6,6 @@ import 'package:latlong/latlong.dart';
 import 'package:http/http.dart' as http;
 import 'package:csv/csv.dart';
 
-var covid19_github_url = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/03-09-2020.csv';
 class GithubCaseEvent {
   String locationName;
   String timestamp;
@@ -35,7 +34,8 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
   List<CircleMarker> _stopLocations = [];
   List<Polyline> _motionChangePolylines = [];
 
-  List<CircleMarker> _caseLocations = [];
+  List<Marker> _caseLocations = [];
+  List<Marker> _caseInfoWindows = [];
 
   LatLng _center = new LatLng(41.15, -96.50); // US
   MapController _mapController;
@@ -68,8 +68,20 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
   }
 
   void fetchGithubData() async {
-    var response = await http.get(covid19_github_url);
-    if(response.statusCode == 200) {
+    DateTime today = new DateTime.now();
+    
+    for(var i=0; i<7; i+=1) {
+      DateTime queryDate = today;
+      if(i > 0) {
+        queryDate = today.subtract(new Duration(days: i));
+      }
+      String dateSlug ="${queryDate.month.toString().padLeft(2,'0')}-${queryDate.day.toString().padLeft(2,'0')}-${queryDate.year.toString()}";
+      String covid19_github_url = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/$dateSlug.csv';
+      print(covid19_github_url);
+      var response = await http.get(covid19_github_url);
+      if(response.statusCode != 200) {
+        continue;
+      }
       List<List<dynamic>> rowsAsListOfValues = const CsvToListConverter().convert(response.body.replaceAll("\n", "\r\n"));
       print("rowsAsListOfValues ${rowsAsListOfValues.length}");
       List<GithubCaseEvent> cases = rowsAsListOfValues.map((columns) {
@@ -89,15 +101,49 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
       setState(() {
         cases.forEach((c) {
           LatLng ll = new LatLng(c.lat, c.lng);
-          _caseLocations.add(CircleMarker(
-            point: ll,
-            color: Colors.red.withOpacity(0.5),
-            radius: 5, // c.deaths * 1.0
+          _caseLocations.add(Marker(
+              point: ll,
+              builder: (ctx) => new GestureDetector(
+                onTap: (){
+                  _onSelectCaseMarker(ll, "${c.locationName}\n${c.confirmed} Confirmed\n${c.deaths} Deaths\n${c.recovered} Recovered");
+                },
+              child: new Container(
+                height: 15,
+                width: 15,
+                decoration: new BoxDecoration(
+                  color: Colors.red.withOpacity(0.5),
+                  shape: BoxShape.circle,
+                ),
+              ),
+            )
           ));
         });
       });
-      
+      break; // no need to go to older date
     }
+  }
+
+  void _onSelectCaseMarker(LatLng ll, String description) {
+    setState(() {
+      _caseInfoWindows = [
+        Marker(
+            point: ll,
+            height: 80,
+            width: 200,
+            builder: (ctx) => new Container(
+              child: Padding(
+                padding: EdgeInsets.all(5.0),
+                child: Text(description),
+              ),
+              decoration: new BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.rectangle,
+                border: Border.all(width: 1.0, color: Color(0xAAAAAAAA))
+              ),
+            )
+          )
+      ];
+    });
   }
 
   void _onEnabledChange(bool enabled) {
@@ -225,7 +271,8 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
         // // Small, red circles showing where motionchange:false events fired.
         // new CircleLayerOptions(circles: _stopLocations),
         new CircleLayerOptions(circles: _currentPosition),
-        new CircleLayerOptions(circles: _caseLocations),
+        new MarkerLayerOptions(markers: _caseLocations),
+        new MarkerLayerOptions(markers: _caseInfoWindows),
       ],
     );
   }
