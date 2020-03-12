@@ -47,7 +47,7 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
     _motionActivity = 'UNKNOWN';
 
     _tabController = TabController(
-        length: 1,
+        length: 3,
         initialIndex: 0,
         vsync: this
     );
@@ -58,6 +58,18 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
 
   void initPlatformState() async {
     _configureBackgroundGeolocation();
+    
+    // Fetch currently selected tab.
+    SharedPreferences prefs = await _prefs;
+    
+    int tabIndex = prefs.getInt("tabIndex");
+
+    // Which tab to view?  MapView || EventList.   Must wait until after build before switching tab or bad things happen.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (tabIndex != null) {
+        _tabController.animateTo(tabIndex);
+      }
+    });
   }
 
   void _configureBackgroundGeolocation() async {
@@ -93,17 +105,6 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
       print('[ready] ERROR: $error');
     });
 
-    // Fetch currently selected tab.
-    SharedPreferences prefs = await _prefs;
-    
-    int tabIndex = prefs.getInt("tabIndex");
-
-    // Which tab to view?  MapView || EventList.   Must wait until after build before switching tab or bad things happen.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (tabIndex != null) {
-        _tabController.animateTo(tabIndex);
-      }
-    });
   }
 
   void _onClickEnable(enabled) async {
@@ -135,6 +136,10 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
 
   // Manually fetch the current position.
   void _onClickGetCurrentPosition() async {
+    if(!_enabled) {
+      util.Dialog.alert(context, 'Location tracking is disable', 'Please enable tracking in settings page and allow the app to use location service all the time');
+
+    }
     bg.BackgroundGeolocation.playSound(util.Dialog.getSoundId("BUTTON_CLICK"));
 
     // force tracking, we know there is user interaction
@@ -243,9 +248,9 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
               controller: _tabController,
               indicatorColor: Colors.red,
               tabs: [
-                // Tab(icon: Icon(Icons.map)),
+                Tab(icon: Icon(Icons.map)),
                 Tab(icon: Icon(Icons.list)),
-                // Tab(icon: Icon(Icons.settings)),
+                Tab(icon: Icon(Icons.settings)),
               ]
           )
       ),
@@ -255,9 +260,9 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
           child: TabBarView(
               controller: _tabController,
               children: [
-                // MapView(),
+                MapView(),
                 EventList(),
-                // SettingsView(),
+                SettingsView(),
               ],
               physics: new NeverScrollableScrollPhysics()
           )
