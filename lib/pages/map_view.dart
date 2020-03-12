@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
+import 'dart:math';
 import 'package:flutter_background_geolocation/flutter_background_geolocation.dart' as bg;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map/plugin_api.dart';
 import 'package:latlong/latlong.dart';
 import 'package:http/http.dart' as http;
 import 'package:csv/csv.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class GithubCaseEvent {
   String locationName;
@@ -25,6 +28,7 @@ class MapView extends StatefulWidget {
 class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<MapView> {
   @override
   bool get wantKeepAlive { return true; }
+  Future<SharedPreferences> _prefs = SharedPreferences.getInstance();
 
   bg.Location _stationaryLocation;
 
@@ -40,11 +44,18 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
   LatLng _center = new LatLng(41.15, -96.50); // US
   MapController _mapController;
   MapOptions _mapOptions;
+  bool _enablePublicData = false;
 
   @override
   void initState() {
     super.initState();
-    fetchGithubData();
+    refreshhGithubData();
+
+    // currently I dont have a good way to sync with setting in shared_preferences...
+    // so polling it for now
+    Timer.periodic(new Duration(seconds: 5), (timer) {
+      refreshhGithubData();
+    });
     _mapOptions = new MapOptions(
         onPositionChanged: _onPositionChanged,
         center: _center,
@@ -55,19 +66,38 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
     bg.BackgroundGeolocation.onLocation(_onLocation);
     bg.BackgroundGeolocation.onMotionChange(_onMotionChange);
     bg.BackgroundGeolocation.onEnabledChange(_onEnabledChange);
-    bg.BackgroundGeolocation.getCurrentPosition(
-      maximumAge: 86400000,   // 1d is okay, this is just for default view
-    ).then((bg.Location location) {
-      // force set zoom on startup
-      LatLng ll = new LatLng(location.coords.latitude, location.coords.longitude);
-      _mapController.move(ll, 10.0);
-      print('[getCurrentPosition] - $location');
-    }).catchError((error) {
-      print('[getCurrentPosition] ERROR: $error');
+    bg.BackgroundGeolocation.state.then((bg.State state) {
+      setState(() {
+        if(state.enabled){
+          bg.BackgroundGeolocation.getCurrentPosition(
+            maximumAge: 86400000,   // 1d is okay, this is just for default view
+          ).then((bg.Location location) {
+            // force set zoom on startup
+            LatLng ll = new LatLng(location.coords.latitude, location.coords.longitude);
+            _mapController.move(ll, 10.0);
+          }).catchError((error) {
+          });
+        }
+      });
     });
   }
 
-  void fetchGithubData() async {
+  void refreshhGithubData() async {
+    SharedPreferences prefs = await _prefs;
+    _enablePublicData = prefs.getBool("enablePublicData");
+    if(!_enablePublicData) {
+      if(_caseLocations.isNotEmpty){
+        setState(() {
+          _caseLocations = [];
+          _caseInfoWindows = [];
+        });
+      }
+      return;
+    }
+    if(_caseLocations.isNotEmpty){ // if data already loaded, do nothing
+      return;
+    }
+
     DateTime today = new DateTime.now();
     
     for(var i=0; i<7; i+=1) {
@@ -76,9 +106,8 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
         queryDate = today.subtract(new Duration(days: i));
       }
       String dateSlug ="${queryDate.month.toString().padLeft(2,'0')}-${queryDate.day.toString().padLeft(2,'0')}-${queryDate.year.toString()}";
-      String covid19_github_url = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/$dateSlug.csv';
-      print(covid19_github_url);
-      var response = await http.get(covid19_github_url);
+      String covid19GithubUrl = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/$dateSlug.csv';
+      var response = await http.get(covid19GithubUrl);
       if(response.statusCode != 200) {
         continue;
       }
@@ -101,15 +130,20 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
       setState(() {
         cases.forEach((c) {
           LatLng ll = new LatLng(c.lat, c.lng);
+          double minRadius = 15.0; // ~ 1 case
+          double maxRadius = 25;   // 1 mil cases, log(1e6) = 6
+          double radius = minRadius + min(6, log(c.confirmed - c.deaths - c.recovered)) * maxRadius / 6;
           _caseLocations.add(Marker(
+              height: radius,
+              width: radius,
               point: ll,
               builder: (ctx) => new GestureDetector(
                 onTap: (){
                   _onSelectCaseMarker(ll, "${c.locationName}\n${c.confirmed} Confirmed\n${c.deaths} Deaths\n${c.recovered} Recovered");
                 },
               child: new Container(
-                height: 15,
-                width: 15,
+                height: radius,
+                width: radius,
                 decoration: new BoxDecoration(
                   color: Colors.red.withOpacity(0.5),
                   shape: BoxShape.circle,

@@ -1,9 +1,11 @@
+import 'package:covid19tracker/pages/about.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_background_geolocation/flutter_background_geolocation.dart' as bg;
 import 'package:background_fetch/background_fetch.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'config/env.dart';
 import './pages/home.dart';
+import './pages/about.dart';
 
 void main() {
   runApp(MyApp());
@@ -35,7 +37,10 @@ class MyApp extends StatelessWidget {
       ),
       home: Scaffold(
           body: HomePage()
-      )
+      ),
+      routes: <String, WidgetBuilder>{
+        AboutPage.route: (context) => AboutPage(),
+      },
     );
   }
 }

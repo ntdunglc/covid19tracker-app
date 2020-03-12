@@ -101,14 +101,15 @@ class EventListState extends State<EventList> with AutomaticKeepAliveClientMixin
             Text("Showing ${eventStore.events.length} events"),
             Expanded(
               child: ListView.builder(
-              padding: const EdgeInsets.all(0.0),
-              itemCount: eventStore.locationEvents.length,
-              itemBuilder: /*1*/ (context, index) {
-                final event = eventStore.locationEvents[index];
-                return ListTile(
-                  title: Text("${event.timestamp},${event.lat},${event.lng}"),
-                );
-              })
+                padding: const EdgeInsets.all(0.0),
+                itemCount: eventStore.locationEvents.length,
+                itemBuilder: /*1*/ (context, index) {
+                  final event = eventStore.locationEvents[index];
+                  return ListTile(
+                    title: Text("${event.timestamp},${event.lat},${event.lng}"),
+                  );
+                }
+              )
             )
         ]),
     );

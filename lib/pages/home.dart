@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_background_geolocation/flutter_background_geolocation.dart' as bg;
@@ -11,17 +10,17 @@ import 'dart:io';
 
 import 'map_view.dart';
 import 'event_list.dart';
+import 'settings.dart';
+import 'about.dart';
 import '../widgets/dialog.dart' as util;
 import '../shared_events.dart';
-import 'package:archive/archive.dart';
 import 'package:archive/archive_io.dart';
-
-// For pretty-printing location JSON
-JsonEncoder encoder = new JsonEncoder.withIndent("     ");
 
 /// The main home-screen of the AdvancedApp.  Builds the Scaffold of the App.
 ///
 class HomePage extends StatefulWidget {
+  static const String route = '/';
+
   @override
   State createState() => HomePageState();
 }
@@ -48,7 +47,7 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
     _motionActivity = 'UNKNOWN';
 
     _tabController = TabController(
-        length: 2,
+        length: 1,
         initialIndex: 0,
         vsync: this
     );
@@ -108,7 +107,6 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
   }
 
   void _onClickEnable(enabled) async {
-    bg.BackgroundGeolocation.playSound(util.Dialog.getSoundId("BUTTON_CLICK"));
     if (enabled) {
       dynamic callback = (bg.State state) {
         print('[start] success: $state');
@@ -139,16 +137,6 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
   void _onClickGetCurrentPosition() async {
     bg.BackgroundGeolocation.playSound(util.Dialog.getSoundId("BUTTON_CLICK"));
 
-    bg.BackgroundGeolocation.getCurrentPosition(
-        desiredAccuracy: 40, // <-- desire an accuracy of 40 meters or less
-        maximumAge: 10000,   // <-- Up to 10s old is fine.
-        timeout: 30,
-    ).then((bg.Location location) {
-      print('[getCurrentPosition] - $location');
-    }).catchError((error) {
-      print('[getCurrentPosition] ERROR: $error');
-    });
-
     // force tracking, we know there is user interaction
     bg.BackgroundGeolocation.changePace(true).then((bool isMoving) { 
       print('[changePace] success $isMoving');
@@ -165,21 +153,27 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
     print('[${bg.Event.LOCATION}] - $location');
 
     setState(() {
-      eventStore.insertEvent(Event(location.timestamp, bg.Event.LOCATION, location.coords.latitude, location.coords.longitude, location.toString(compact: true)));
+      if(_enabled) {
+        eventStore.insertEvent(Event(location.timestamp, bg.Event.LOCATION, location.coords.latitude, location.coords.longitude, location.toString(compact: true)));
+      }
     });
   }
 
   void _onLocationError(bg.LocationError error) {
     print('[${bg.Event.LOCATION}] ERROR - $error');
     setState(() {
-      eventStore.insertEvent(Event(toEventDateTimeFormat(DateTime.now()), bg.Event.LOCATION + " error", -1, -1, error.toString()));
+      if(_enabled) {
+        eventStore.insertEvent(Event(toEventDateTimeFormat(DateTime.now()), bg.Event.LOCATION + " error", -1, -1, error.toString()));
+      }
     });
   }
 
   void _onMotionChange(bg.Location location) {
     print('[${bg.Event.MOTIONCHANGE}] - $location');
-    setState(() {
-      eventStore.insertEvent(Event(location.timestamp, bg.Event.MOTIONCHANGE, location.coords.latitude, location.coords.longitude, location.toString(compact:true)));
+    setState(() {   
+      if(_enabled) {
+        eventStore.insertEvent(Event(location.timestamp, bg.Event.MOTIONCHANGE, location.coords.latitude, location.coords.longitude, location.toString(compact:true)));
+      }
       _isMoving = location.isMoving;
     });
   }
@@ -187,7 +181,9 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
   void _onHeartbeat(bg.HeartbeatEvent event) {
     print('[${bg.Event.HEARTBEAT}] - $event');
     setState(() {
-      eventStore.insertEvent(Event(event.location.timestamp, bg.Event.HEARTBEAT, event.location.coords.latitude, event.location.coords.longitude, event.toString()));
+      if(_enabled) {
+        eventStore.insertEvent(Event(event.location.timestamp, bg.Event.HEARTBEAT, event.location.coords.latitude, event.location.coords.longitude, event.toString()));
+      }
     });
   }
 
@@ -227,6 +223,7 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
     _isLoadingFile = false;
   }
   void _onClickHelp() async {
+    Navigator.pushReplacementNamed(context, AboutPage.route);
   }
   
   @override
@@ -246,8 +243,9 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
               controller: _tabController,
               indicatorColor: Colors.red,
               tabs: [
-                Tab(icon: Icon(Icons.map)),
-                Tab(icon: Icon(Icons.list))
+                // Tab(icon: Icon(Icons.map)),
+                Tab(icon: Icon(Icons.list)),
+                // Tab(icon: Icon(Icons.settings)),
               ]
           )
       ),
@@ -257,8 +255,9 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
           child: TabBarView(
               controller: _tabController,
               children: [
-                MapView(),
-                EventList()
+                // MapView(),
+                EventList(),
+                // SettingsView(),
               ],
               physics: new NeverScrollableScrollPhysics()
           )
