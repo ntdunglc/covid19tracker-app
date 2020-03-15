@@ -12,6 +12,7 @@ class EventList extends StatefulWidget {
 class EventListState extends State<EventList> with AutomaticKeepAliveClientMixin<EventList> {
   Future<SharedPreferences> _prefs = SharedPreferences.getInstance();
   final isSelected = <bool>[true, false, false];
+  final eventStore = EventStore();
 
   @override
   bool get wantKeepAlive {
@@ -40,7 +41,6 @@ class EventListState extends State<EventList> with AutomaticKeepAliveClientMixin
         }
       }
     });
-    final eventStore = EventStore.instance();
     DateTime today = new DateTime.now();
     DateTime filterTimeStamp;
     switch (idx) {
@@ -65,9 +65,6 @@ class EventListState extends State<EventList> with AutomaticKeepAliveClientMixin
 
   @override
   Widget build(BuildContext context) {
-
-    // Fetch SharedEvents for events data.
-    final eventStore = EventStore.instance();
     
     return Container(
         //color: Color.fromRGBO(20, 20, 20, 1.0),

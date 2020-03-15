@@ -44,14 +44,16 @@ class _SettingsViewState extends State<SettingsView> {
         _values["enableTracking"] = _state.enabled;
       });
     });
+    bg.BackgroundGeolocation.onEnabledChange((bool enabled) {
+      setState(() {
+        _values["enableTracking"] = enabled;
+      });
+    });
     SharedPreferences prefs = await _prefs;
     setState(() {
       _values["enablePublicData"] = prefs.getBool("enablePublicData") ?? false;
     });
 
-  }
-
-  _onSelectMenu(String action) async {
   }
 
   @override
@@ -109,19 +111,12 @@ class _SettingsViewState extends State<SettingsView> {
         ),
         child: Text(setting["text"], style: TextStyle(color: Colors.blue, fontSize: 15.0))
     );
-    return Padding(
-      padding: const EdgeInsets.only(left: 5.0, right: 5.0),
-      child: Text(setting["text"], style: TextStyle(color: Colors.blue, fontSize: 15.0))
-    );
   }
   
 
   Widget _buildSwitchField(Map<String, Object> setting) {
     String name = setting['name'];
-    print(" _values[name] ${ _values} ${name}");
-    // print("  _state.map[name] ${  _state.map[name]}");
     bool value = _values[name];
-    // bool value = _state.map[name];
     return InputDecorator(
         decoration: InputDecoration(
           contentPadding: EdgeInsets.only(top:0.0, left:10.0, bottom:0.0),

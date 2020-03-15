@@ -133,23 +133,6 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
       bg.BackgroundGeolocation.stop().then(callback);
     }
   }
-
-  // Manually fetch the current position.
-  void _onClickGetCurrentPosition() async {
-    if(!_enabled) {
-      util.Dialog.alert(context, 'Location tracking is disable', 'Please enable tracking in settings page and allow the app to use location service all the time');
-
-    }
-    bg.BackgroundGeolocation.playSound(util.Dialog.getSoundId("BUTTON_CLICK"));
-
-    // force tracking, we know there is user interaction
-    bg.BackgroundGeolocation.changePace(true).then((bool isMoving) { 
-      print('[changePace] success $isMoving');
-    }).catchError((e) {
-      print('[changePace] ERROR: ' + e.code.toString());
-    });
-  }
-
   ////
   // Event handlers
   //
@@ -267,25 +250,25 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
               physics: new NeverScrollableScrollPhysics()
           )
       ),
-      bottomNavigationBar: BottomAppBar(
-          child: Container(
-              padding: const EdgeInsets.only(left: 5.0, right: 5.0),
-              child: Row(
-                  mainAxisSize: MainAxisSize.max,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: <Widget>[
-                    IconButton(
-                      icon: Icon(Icons.gps_fixed),
-                      onPressed: _onClickGetCurrentPosition,
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.share),
-                      onPressed: _onClickShareLog,
-                    ),
-                  ]
-              )
-          )
-      ),
+      // bottomNavigationBar: BottomAppBar(
+      //     child: Container(
+      //         padding: const EdgeInsets.only(left: 5.0, right: 5.0),
+      //         child: Row(
+      //             mainAxisSize: MainAxisSize.max,
+      //             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      //             children: <Widget>[
+      //               IconButton(
+      //                 icon: Icon(Icons.gps_fixed),
+      //                 onPressed: _onClickGetCurrentPosition,
+      //               ),
+      //               IconButton(
+      //                 icon: Icon(Icons.share),
+      //                 onPressed: _onClickShareLog,
+      //               ),
+      //             ]
+      //         )
+      //     )
+      // ),
     );
   }
 

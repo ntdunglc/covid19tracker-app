@@ -86,14 +86,12 @@ class EventStore {
       await open();
     }
     String lastTimestampStr = toEventDateTimeFormat(lastTimestamp);
-    print("lastTimestamp.toUtc() ${lastTimestamp.toUtc()} $lastTimestampStr");
     List<Map> maps = await db.query("LocationEvents",
       columns: ["timestamp", "eventType", "lat", "lng", "content"],
       where: 'timestamp > ?',
       whereArgs: [lastTimestampStr],
       orderBy: "timestamp DESC"
     );
-    print("[EventStore] loaded ${maps.length}");
     events = maps.map((m) => Event.fromMap(m)).toList();
     return events;
   }
