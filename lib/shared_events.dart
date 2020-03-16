@@ -35,11 +35,53 @@ class Event {
     };
     return map;
   }
+  @override
+  String toString() {
+      return toMap().toString();
+  }
+}
+
+class HistoricalLocation {
+  int id;
+  String name;
+  double lat;
+  double lng;
+  String startTime;
+  String endTime;
+  String description;
+  HistoricalLocation(this.name,this.lat, this.lng, this.startTime,  this.endTime,  this.description);
+
+  HistoricalLocation.fromMap(Map map) {
+    id = map["id"] as int;
+    name = map["name"] as String;
+    lat = map["lat"] as double;
+    lng = map["lng"] as double;
+    startTime = map["startTime"] as String;
+    endTime = map["endTime"] as String;
+    description = map["description"] as String;
+  }
+    /// Convert to a record.
+  Map<String, dynamic> toMap() {
+    var map = <String, dynamic>{
+      "name": name,
+      "lat": lat,
+      "lng": lng,
+      "startTime": startTime,
+      "endTime": endTime,
+      "description": description,
+    };
+    return map;
+  }    
+  @override
+  String toString() {
+      return toMap().toString();
+  }
 }
 
 class EventStore {
   Database db;
   List<Event> events = [];
+  List<HistoricalLocation> historicalLocations = [];
   EventStore();
 
   static EventStore _instance  = EventStore();
@@ -54,8 +96,8 @@ class EventStore {
   /// Open the database.
   Future open() async {
     print("[EventStore] opening db");
-    db = await openDatabase(ENV.DB_PATH, version: 1,
-          onCreate: (Database db, int version) async {
+    db = await openDatabase(ENV.DB_PATH, version: 2,
+      onCreate: (Database db, int version) async {
         await db.execute('''
           create table LocationEvents ( 
             id integer primary key autoincrement, 
@@ -65,7 +107,22 @@ class EventStore {
             lng double,
             content TEXT not null)
           ''');
+      },
+      onUpgrade: (Database db, int oldVersion, int newVersion) async{
+        if(newVersion == 2) {
+          await db.execute('''
+            create table HistoricalLocations ( 
+              id integer primary key autoincrement, 
+              name TEXT not null,
+              lat double,
+              lng double,
+              startTime TEXT not null,
+              endTime TEXT not null,
+              description TEXT not null)
+            ''');
+        }
       });
+      // await db.delete("HistoricalLocations");
   }
 
   void insertEvent(Event event) async {
@@ -96,22 +153,55 @@ class EventStore {
     return events;
   }
 
-}
-
-/// Shared data container for all widgets in app.
-class SharedEvents extends InheritedWidget {
-
-  final EventStore eventStore;
-
-  SharedEvents({this.eventStore, child: Widget}):super(child: child);
-
-  static SharedEvents of(BuildContext context) {
-    return context.dependOnInheritedWidgetOfExactType();
-    // return context.inheritFromWidgetOfExactType(SharedEvents);
+  void insertHistoricalLocation(HistoricalLocation location) async {
+    print(location);
+    historicalLocations.insert(0, location);
+    if(db == null) {
+      await open();
+    }
+    location.id = await db.insert("HistoricalLocations", location.toMap());
   }
 
-  @override
-  bool updateShouldNotify(SharedEvents oldWidget) {
-    return oldWidget.eventStore.events.length != eventStore.events.length;
+  Future<List<HistoricalLocation>> loadHistoricalLocations() async {
+    print("[EventStore] loadHistoricalLocations");
+    if(db == null) {
+      await open();
+    }
+    List<Map> maps = await db.query("HistoricalLocations",
+      orderBy: "startTime DESC"
+    );
+    historicalLocations = maps.map((m) => HistoricalLocation.fromMap(m)).toList();
+    print("[EventStore] loadHistoricalLocations ${historicalLocations.length}");
+    return historicalLocations;
   }
+
+  
+  void updateHistoricalLocation(int id, HistoricalLocation location) async {
+    if(db == null) {
+      await open();
+    }
+    await db.update(
+      "HistoricalLocations", 
+      location.toMap(),
+      where: 'id = ?', 
+      whereArgs: [id],
+    );
+  }
+
+  
+  void deleteHistoricalLocation(int id) async {
+    if(db == null) {
+      await open();
+    }
+    await db.delete(
+      "HistoricalLocations", 
+      where: 'id = ?', 
+      whereArgs: [id],
+    );
+  }
+
+  
+
+
 }
+

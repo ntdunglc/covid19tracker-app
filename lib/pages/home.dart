@@ -238,17 +238,14 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
           )
       ),
       //body: body,
-      body: SharedEvents(
-          eventStore: eventStore,
-          child: TabBarView(
-              controller: _tabController,
-              children: [
-                MapView(),
-                EventList(),
-                SettingsView(),
-              ],
-              physics: new NeverScrollableScrollPhysics()
-          )
+      body: TabBarView(
+          controller: _tabController,
+          children: [
+            MapView(),
+            EventList(),
+            SettingsView(),
+          ],
+          physics: new NeverScrollableScrollPhysics()
       ),
       // bottomNavigationBar: BottomAppBar(
       //     child: Container(
