@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import '../widgets/dialog.dart' as util;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_background_geolocation/flutter_background_geolocation.dart' as bg;
+import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:async';
 
 
 const INPUT_TYPE_SELECT = "select";
@@ -21,6 +23,12 @@ class _SettingsViewState extends State<SettingsView> {
   bg.State _state;
   Future<SharedPreferences> _prefs = SharedPreferences.getInstance();
 
+  
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  StreamSubscription<FirebaseUser> _listener;
+  FirebaseUser _currentUser;
+
+
   // Categorized field-lists.
   List<Map> _applicationSettings = [];
   Map<String, dynamic> _values = {
@@ -35,6 +43,7 @@ class _SettingsViewState extends State<SettingsView> {
     });
 
     initPlatformState();
+    _checkCurrentUser();
   }
 
   void initPlatformState() async {
@@ -53,7 +62,23 @@ class _SettingsViewState extends State<SettingsView> {
     setState(() {
       _values["enablePublicData"] = prefs.getBool("enablePublicData") ?? false;
     });
+  }
 
+  void _checkCurrentUser() async {
+    _currentUser = await _auth.currentUser();
+    _currentUser?.getIdToken(refresh: true);
+
+    _listener = _auth.onAuthStateChanged.listen((FirebaseUser user) {
+      setState(() {
+        _currentUser = user;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _listener.cancel();
+    super.dispose();
   }
 
   @override
@@ -63,13 +88,33 @@ class _SettingsViewState extends State<SettingsView> {
         body: new Text('Loading...')
       );
     }
-    
+    Widget userStatus = _currentUser == null
+      ? Text("Anonymous user")
+      : Column(
+        children: <Widget>[
+          Text("Logged in as: ${_currentUser.email}"),
+          IconButton(
+            icon: Icon(Icons.exit_to_app),
+            onPressed: () => {
+              _auth.signOut()
+            },
+          )
+        ],
+      );
+      
     return new Container(
       child: new CustomScrollView(
         slivers: <Widget>[
 
           _buildList(_applicationSettings),
-        ],
+          // userStatus,
+          SliverToBoxAdapter( 
+            child: Container(
+              padding: EdgeInsets.all(12.0),
+              child: userStatus,
+            )
+          ),
+        ]
       )
     );
   }

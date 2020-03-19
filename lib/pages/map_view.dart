@@ -16,10 +16,11 @@ import 'package:flutter_form_builder/flutter_form_builder.dart';
 import 'package:intl/intl.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:duration/duration.dart' as duration;
-import 'package:flutter_firebase_ui/flutter_firebase_ui.dart';
+// import 'package:flutter_firebase_ui/flutter_firebase_ui.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../widgets/dialog.dart' as util;
 import '../shared_events.dart';
+import '../firebase_ui/email_view.dart';
 
 class GithubCaseEvent {
   String locationName;
@@ -183,7 +184,6 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
         continue;
       }
       List<List<dynamic>> rowsAsListOfValues = const CsvToListConverter().convert(response.body.replaceAll("\n", "\r\n"));
-      print("rowsAsListOfValues ${rowsAsListOfValues.length}");
       List<GithubCaseEvent> cases = rowsAsListOfValues.map((columns) {
         try{
           String locationName = columns[1];
@@ -455,11 +455,9 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
     Event event = _prevEvent;
     if(event == null){
       if(eventStore.events.length == 0){
-        print("no events");
         util.Dialog.alert(context, 'No history events', 'Please enable tracking in settings page and wait for locations to be recorded to use this feature'); // this should not happen
         return;
       } else {
-        print("eventStore.events.length ${eventStore.events.length}");
         event = eventStore.events[eventStore.events.length - 1];
         message = "TIme slider is not used, using latest known location as historical location";
       }
@@ -530,7 +528,6 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
   }
 
   Future _insertHistoricalLocation() async{
-    print(_locationHistoryFormKey.currentState.value);
     String latlng = _locationHistoryFormKey.currentState.value["latlng"];
     double lat = double.parse(latlng.split(",")[0]);
     double lng = double.parse(latlng.split(",")[1]);
@@ -588,40 +585,34 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
     });
   }
 
-  void _onReportTravelHistory () {
-    showDialog(
-        context: context,
-        builder: (BuildContext context) {
-          return AlertDialog(
-            content: _loginForm(),
-          );
-        });
+  void _onReportTravelHistory () async{
+    print(_currentUser);
+    if (_currentUser == null) {
+      _handleEmailSignIn();
+    } else {
+      if(!_currentUser.isEmailVerified) {
+        // _auth.
+        print("refreshing user");
+        await _currentUser.reload();
+        _currentUser = await _auth.currentUser();
+        // await _currentUser?.getIdToken(refresh: true);
+        // print(_currentUser.isEmailVerified);
+        // _currentUser = await _auth.currentUser();
+        // _currentUser?.getIdToken(refresh: true);
+      }
+      if(!_currentUser.isEmailVerified) {
+        util.Dialog.alert(context, 'Email not verified', "Please go to your email ${_currentUser.email} and verify");
+      } else {
+        util.Dialog.alert(context, 'User logined!', "Welcome ${_currentUser.displayName}");
+      }
+    }
   }
 
-  @override
-  Widget _loginForm() {
-    if (_currentUser == null) {
-      return new SignInScreen(
-        title: "Bienvenue",
-        header: new Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16.0),
-          child: new Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: new Text("Demo"),
-          ),
-        ),
-        providers: [
-          ProvidersTypes.google,
-          ProvidersTypes.facebook,
-          ProvidersTypes.twitter,
-          ProvidersTypes.email
-        ],
-        twitterConsumerKey: "",
-        twitterConsumerSecret: "",
-      );
-    } else {
-      return new Text("success!");
-    }
+  _handleEmailSignIn() async {
+    String value = await Navigator.of(context)
+        .push(new MaterialPageRoute<String>(builder: (BuildContext context) {
+      return new EmailView(true);
+    }));
   }
 
   void _checkCurrentUser() async {
@@ -813,7 +804,6 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
   }
   
   Widget _historicalLocationList() {
-    print(eventStore.historicalLocations);
     return Column(
       children: <Widget>[
         Row(
@@ -839,11 +829,10 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
             DateTime s = DateTime.parse(location.startTime);
             DateTime e = DateTime.parse(location.endTime);
             Duration difference = e.difference(s);
-            String formattedTime = timeago.format(s) + " - for " + duration.printDuration(difference);
+            String formattedTime = timeago.format(s) + " - for " + duration.prettyDuration(difference);
             if(location.description.isNotEmpty) {
               formattedTime +=  "\n" + location.description;
             }
-            print("difference $s $e ${location.startTime} ${location.endTime} $difference");
             return ListTile(
               title: Text(location.name),
               subtitle: Text(formattedTime),
