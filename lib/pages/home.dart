@@ -4,17 +4,12 @@ import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_background_geolocation/flutter_background_geolocation.dart' as bg;
 import 'package:flutter/services.dart';
-import 'package:flutter_share/flutter_share.dart';
-import 'package:path_provider/path_provider.dart';
-import 'dart:io';
 
 import 'map_view.dart';
 import 'event_list.dart';
 import 'settings.dart';
 import 'about.dart';
-import '../widgets/dialog.dart' as util;
 import '../shared_events.dart';
-import 'package:archive/archive_io.dart';
 
 /// The main home-screen of the AdvancedApp.  Builds the Scaffold of the App.
 ///
@@ -32,7 +27,6 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
   bool _isMoving;
   bool _enabled;
   String _motionActivity;
-  bool _isLoadingFile = false;
 
   EventStore eventStore = EventStore.instance();
 
@@ -183,33 +177,6 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin<HomePa
     });
   }
 
-  void _onClickShareLog() async {
-    if(_isLoadingFile){
-      return;
-    }
-    try {
-      _isLoadingFile = true;
-      final directory = await getExternalStorageDirectory();
-      File localFile = File('${directory.path}/covid19tracker_locations.txt');
-      String data = eventStore.locationEvents
-        .map((event) => "${event.timestamp},${event.lat},${event.lng}")
-        .join("\n");
-      await localFile.writeAsString(data);
-
-      var encoder = ZipFileEncoder();
-      encoder.create('${directory.path}/covid19tracker_locations.zip');
-      encoder.addFile(localFile);
-      encoder.close();
-
-      await FlutterShare.shareFile(
-        title: 'Covid 19 Tracker Location Data',
-        filePath: '${directory.path}/covid19tracker_locations.zip',
-      );
-    } catch (error) {
-      print("error sharing log $error");
-    }
-    _isLoadingFile = false;
-  }
   void _onClickHelp() async {
     Navigator.pushReplacementNamed(context, AboutPage.route);
   }

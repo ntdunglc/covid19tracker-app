@@ -103,7 +103,6 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
   StreamSubscription<FirebaseUser> _listener;
   FirebaseUser _currentUser;
 
-
   @override
   void initState() {
     super.initState();
@@ -121,6 +120,7 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
         onLongPress: _onSelectMarkerManually
     );
     _mapController = new MapController();
+    // _mapController.st
 
     bg.BackgroundGeolocation.onLocation(_onLocation);
     bg.BackgroundGeolocation.onMotionChange(_onMotionChange);
@@ -426,16 +426,6 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
     _geocodingLocation(_currentLatLng);
   }
 
-  // void _geocodingLocation(LatLng ll) async{
-  //   var response = await http.get("http://photon.komoot.de/reverse?lat=${ll.latitude}&lon=${ll.longitude}");
-  //   if (response.statusCode == 200) {
-  //     Map<dynamic, dynamic> properties = json.decode(response.body)["features"][0]["properties"];
-  //     String name = "${properties['name']!=null ? properties['name']+", " : ""}${properties['housenumber']!=null ? properties['housenumber']+" " : ""}${properties['street']!=null ? properties['street']+", " : ""}${properties['state']!=null ? properties['state']+" " : ""}${properties['postcode']!=null ? properties['postcode']: ""}";
-  //     _locationHistoryFormControllers["name"].text = name;
-  //   } else {
-  //     throw Exception('Failed to load album');
-  //   }
-  // }
   void _geocodingLocation(LatLng ll) async{
     var response = await http.get("http://3.226.73.226:8000/geolocation/${ll.latitude}/${ll.longitude}");
     if (response.statusCode == 200) {
@@ -591,19 +581,33 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
       _handleEmailSignIn();
     } else {
       if(!_currentUser.isEmailVerified) {
-        // _auth.
-        print("refreshing user");
         await _currentUser.reload();
         _currentUser = await _auth.currentUser();
-        // await _currentUser?.getIdToken(refresh: true);
-        // print(_currentUser.isEmailVerified);
-        // _currentUser = await _auth.currentUser();
-        // _currentUser?.getIdToken(refresh: true);
       }
       if(!_currentUser.isEmailVerified) {
         util.Dialog.alert(context, 'Email not verified', "Please go to your email ${_currentUser.email} and verify");
       } else {
-        util.Dialog.alert(context, 'User logined!', "Welcome ${_currentUser.displayName}");
+        IdTokenResult result = await _currentUser.getIdToken();
+        Map<String,String> headers = {
+          'Content-type' : 'application/json', 
+          'Accept': 'application/json',
+          "id-token": result.token,
+        };
+        List<Map<String, dynamic>> locations =  eventStore.historicalLocations.map((location) => location.toMap()).toList();
+        var response = await http.post(
+          "http://3.226.73.226:8080/locations/report",
+          body: json.encode({
+            "locations": locations
+          }), 
+          headers: headers
+        );
+        if (response.statusCode == 200) {
+          util.Dialog.alert(context, 'Locations submitted', "Your data will be shared anonymously");
+        } else if  (response.statusCode == 401) {
+          util.Dialog.alert(context, 'Unauthorized', "Login required to submit locations");
+        } else {
+          util.Dialog.alert(context, 'Error', "Error with server, please try again later");
+        }
       }
     }
   }

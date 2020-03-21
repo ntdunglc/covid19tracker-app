@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_share/flutter_share.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:archive/archive_io.dart';
+import 'dart:io';
 import '../shared_events.dart';
 
 /// Renders a simple list of [BackgroundGeolocation] events.  Fetches its data from [SharedEvents] (which is an [InheritedWidget].
@@ -13,6 +17,7 @@ class EventListState extends State<EventList> with AutomaticKeepAliveClientMixin
   Future<SharedPreferences> _prefs = SharedPreferences.getInstance();
   final isSelected = <bool>[true, false, false];
   final eventStore = EventStore();
+  bool _isLoadingFile = false;
 
   @override
   bool get wantKeepAlive {
@@ -63,6 +68,34 @@ class EventListState extends State<EventList> with AutomaticKeepAliveClientMixin
     prefs.setInt("timestampFilter", idx);
   }
 
+  void _onClickShareLog() async {
+    if(_isLoadingFile){
+      return;
+    }
+    try {
+      _isLoadingFile = true;
+      final directory = await getExternalStorageDirectory();
+      File localFile = File('${directory.path}/covid19tracker_locations.txt');
+      String data = eventStore.locationEvents
+        .map((event) => "${event.timestamp},${event.lat},${event.lng}")
+        .join("\n");
+      await localFile.writeAsString(data);
+
+      var encoder = ZipFileEncoder();
+      encoder.create('${directory.path}/covid19tracker_locations.zip');
+      encoder.addFile(localFile);
+      encoder.close();
+
+      await FlutterShare.shareFile(
+        title: 'Covid 19 Tracker Location Data',
+        filePath: '${directory.path}/covid19tracker_locations.zip',
+      );
+    } catch (error) {
+      print("error sharing log $error");
+    }
+    _isLoadingFile = false;
+  }
+
   @override
   Widget build(BuildContext context) {
     
@@ -70,8 +103,7 @@ class EventListState extends State<EventList> with AutomaticKeepAliveClientMixin
         //color: Color.fromRGBO(20, 20, 20, 1.0),
         color: Colors.white,
         padding: EdgeInsets.all(5.0),
-        child: 
-          Column(
+        child: Column(
           children: <Widget>[
             ToggleButtons(
               children: [
@@ -107,6 +139,15 @@ class EventListState extends State<EventList> with AutomaticKeepAliveClientMixin
                   );
                 }
               )
+            ), 
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: RaisedButton(
+                child: Text("Email log"),
+                onPressed: _onClickShareLog,
+                color: Colors.lightBlue,
+                textColor: Colors.white,
+              ),
             )
         ]),
     );

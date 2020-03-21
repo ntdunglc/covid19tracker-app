@@ -27,6 +27,7 @@ class Event {
     /// Convert to a record.
   Map<String, dynamic> toMap() {
     var map = <String, dynamic>{
+      "id": id,
       "timestamp": timestamp,
       "eventType": eventType,
       "lat": lat,
@@ -63,6 +64,7 @@ class HistoricalLocation {
     /// Convert to a record.
   Map<String, dynamic> toMap() {
     var map = <String, dynamic>{
+      "id": id,
       "name": name,
       "lat": lat,
       "lng": lng,
