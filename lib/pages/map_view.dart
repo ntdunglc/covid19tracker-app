@@ -109,13 +109,6 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
   @override
   void initState() {
     super.initState();
-    DateTime now = DateTime.now();
-    _dateFilter = new DateTime(now.year, now.month, now.day);
-    
-    refreshGithubData();
-    refreshReportedData();
-    refreshLocationEvents();
-
 
     // currently I dont have a good way to sync with setting in shared_preferences...
     // so polling it for now
@@ -129,7 +122,6 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
         onLongPress: _onSelectMarkerManually
     );
     _mapController = new MapController();
-    // _mapController.st
 
     bg.BackgroundGeolocation.onLocation(_onLocation);
     bg.BackgroundGeolocation.onMotionChange(_onMotionChange);
@@ -153,6 +145,14 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
     DateTime today = new DateTime.now();
     eventStore.load(today.subtract(new Duration(days: 30)), DateTime.now()).then((events) => _events = events);
     eventStore.loadHistoricalLocations();
+
+    DateTime now = DateTime.now();
+    _dateFilter = new DateTime(now.year, now.month, now.day);
+    
+    _mapController.onReady.then((a) => refreshReportedData());
+    refreshReportedData();
+    refreshLocationEvents();
+    refreshGithubData();
 
     _checkCurrentUser();
   }
@@ -238,36 +238,36 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
   }
 
   void refreshReportedData() async {
-    LatLng center = _mapController.center;
-    String startTime = toEventDateTimeFormat(_dateFilter);
-    String endTime = toEventDateTimeFormat(_dateFilter.add(new Duration(days: 1)));
-    String searchUrl = '${ENV.API_HOST}/locations/query?lat=${center.latitude}&lng=${center.longitude}&radius=100&start_time=$startTime&end_time=$endTime';
-    // String searchUrl = '${ENV.API_HOST}/locations/query?lat=41.01322584278608&lng=-73.65536959817105&radius=100';
-    var response = await http.get(searchUrl);
-    print(response);
-    if (response.statusCode == 200) {
-        var locations = json.decode(response.body);
-        print(locations);
-        List<Marker> markers = [];
-        for(var loc in locations) {
-          Marker m = Marker(
-            point: new LatLng(loc['lat'], loc['lng']),
-            builder: (ctx) => new GestureDetector(
-              onTap: (){
-                // _onSelectCaseMarker(ll, "${c.locationName}\n${c.confirmed} Confirmed\n${c.deaths} Deaths\n${c.recovered} Recovered");
-              },
-              child: Icon(
-                Icons.report,
-                color: Colors.redAccent,
-                size: 30.0,
-              ),
-            )
-          );
-          markers.add(m);
-        }
-        setState(() {
-          _reportedLocations = markers;
-        });
+    if(_mapController.ready) {
+      LatLng center = _mapController.center;
+      String startTime = toEventDateTimeFormat(_dateFilter);
+      String endTime = toEventDateTimeFormat(_dateFilter.add(new Duration(days: 1)));
+      String searchUrl = '${ENV.API_HOST}/locations/query?lat=${center.latitude}&lng=${center.longitude}&radius=100&start_time=$startTime&end_time=$endTime';
+      // String searchUrl = '${ENV.API_HOST}/locations/query?lat=41.01322584278608&lng=-73.65536959817105&radius=100';
+      var response = await http.get(searchUrl);
+      if (response.statusCode == 200) {
+          var locations = json.decode(response.body);
+          List<Marker> markers = [];
+          for(var loc in locations) {
+            Marker m = Marker(
+              point: new LatLng(loc['lat'], loc['lng']),
+              builder: (ctx) => new GestureDetector(
+                onTap: (){
+                  // _onSelectCaseMarker(ll, "${c.locationName}\n${c.confirmed} Confirmed\n${c.deaths} Deaths\n${c.recovered} Recovered");
+                },
+                child: Icon(
+                  Icons.report,
+                  color: Colors.redAccent,
+                  size: 30.0,
+                ),
+              )
+            );
+            markers.add(m);
+          }
+          setState(() {
+            _reportedLocations = markers;
+          });
+      }
     }
   }
 
@@ -417,8 +417,6 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
       });
     } else {
       Event event = _events[idx];
-      print(dt);
-      print(event);
       LatLng ll = new LatLng(event.lat, event.lng);
       setState(() {
         _historyLocations = [
@@ -451,17 +449,11 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
 
   void _onDateTimeSliderChange() {
     setState(() {
-      // DateTime maxValue = new DateTime.now();
-      // if(maxValue.difference(_dateFilter).inDays > 0){
-      //   maxValue = _dateFilter.add(new Duration(days:1));
-      // } 
-      // int minutesToday = maxValue.difference(_dateFilter).inMinutes;
-      // int minutesFilter = (_timeSliderValue / _timeSliderMaxValue * minutesToday).round(); // 1 min step
-      // _timestampFilter = _dateFilter.add(new Duration(minutes: minutesFilter));
-      // _onTimeStampFilterChange(_timestampFilter);
       int eventIdx = (_timeSliderValue / _timeSliderMaxValue * _events.length).round(); // 1 min step
-      _timestampFilter = DateTime.parse(_events[eventIdx].timestamp);
-      _onTimeStampFilterChange(_timestampFilter);
+      if(eventIdx < _events.length){
+        _timestampFilter = DateTime.parse(_events[eventIdx].timestamp);
+        _onTimeStampFilterChange(_timestampFilter);
+      }
     });
   }
 
@@ -616,6 +608,7 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
     });
   }
   void refreshLocationEvents(){
+    print("refreshLocationEvents $_dateFilter");
     eventStore.load(_dateFilter, _dateFilter.add(new Duration(days: 1))).then((events) {
       _events = events;
       var points = _events.map((e) => LatLng(e.lat, e.lng)).toList();
@@ -725,11 +718,13 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
           Positioned(
             top: 20.0,
             // right: 20.0,
+            // right: 20.0,
             child: Container(
               // padding: const EdgeInsets.all(10.0),
               width: notificationWidth,
               color: Colors.white.withOpacity(0.7),
               child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: <Widget>[
                     IconButton(
                       icon: Icon(Icons.keyboard_arrow_left),
@@ -740,7 +735,7 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
                           showDatePicker(
                             context: context,
                             initialDate: DateTime.now(),
-                            firstDate: DateTime(2018),
+                            firstDate: DateTime(2019),
                             lastDate: DateTime(2030),
                             builder: (BuildContext context, Widget child) {
                               return Theme(
@@ -748,14 +743,19 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
                                 child: child,
                               );
                             },
-                          ).then((d) => _updateDateFilter(d));
+                          ).then((d) {
+                            if(d != null) {
+                              _updateDateFilter(d);
+                            }
+                          });
                         },
                         child: Text(_dateFormat.format(_dateFilter)),
                     ),
-                    _dateFilter.isBefore(DateTime.now().add(new Duration(days:1))) ? IconButton(
+                    IconButton(
                       icon: Icon(Icons.keyboard_arrow_right),
-                      onPressed: () => _updateDateFilter(_dateFilter.add(new Duration(days:1))),
-                    ): Container(),
+                      color: _dateFilter.isBefore(DateTime.now().subtract(new Duration(days:1)))? Colors.black: Colors.grey,
+                      onPressed: () => _dateFilter.isBefore(DateTime.now().subtract(new Duration(days:1)))? _updateDateFilter(_dateFilter.add(new Duration(days:1))): null,
+                    ),
                     
                   ],
                 ),
@@ -768,7 +768,7 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
             // width: _sliderWidth,
             bottom: _fabHeight + 70,
             child: RotatedBox(
-                quarterTurns: 1,
+                quarterTurns: 3,
                 child: Slider(	
                   value: _timeSliderValue,
                   min: 0.0,
@@ -834,7 +834,7 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
         children: <Widget>[
           SizedBox(height: 12.0,),
           Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+            // mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
               Container(
                 width: 30,
