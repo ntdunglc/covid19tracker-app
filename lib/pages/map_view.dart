@@ -14,10 +14,12 @@ import 'package:sliding_up_panel/sliding_up_panel.dart';
 import 'package:flip_card/flip_card.dart';
 import 'package:flutter_form_builder/flutter_form_builder.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_xlider/flutter_xlider.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:duration/duration.dart' as duration;
 // import 'package:flutter_firebase_ui/flutter_firebase_ui.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../config/env.dart';
 import '../widgets/dialog.dart' as util;
 import '../shared_events.dart';
 import '../firebase_ui/email_view.dart';
@@ -43,6 +45,7 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
   bool get wantKeepAlive { return true; }
   Future<SharedPreferences> _prefs = SharedPreferences.getInstance();
   EventStore eventStore = EventStore.instance();
+  List<Event> _events = [];
   bool _enabled;
 
   bg.Location _stationaryLocation;
@@ -60,6 +63,9 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
   List<CircleMarker> _historyLocations = [];
   List<Marker> _addLocationsFormMarker = [];
 
+  List<Marker> _reportedLocations = [];
+  List<Polyline> _historyEventsPolylines = [];
+
   LatLng _center = new LatLng(41.15, -96.50); // US
   MapController _mapController;
   MapOptions _mapOptions;
@@ -74,20 +80,17 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
   double _panelHeightClosed = 75.0;
   double _fabHeight = 100.0;
 
-  static int timeBlock = 24; // hours
-  static int minDays = 14; // days
-  double _timeSliderMaxValue = timeBlock * 60.0;
-  double _timeSliderValue = timeBlock * 60.0;
-  // double _timeSliderLastValue = timeBlock * 60.0;
+  double _timeSliderMaxValue = 5000;
+  double _timeSliderValue = 5000;
   double _sliderWidth;
 
-  double _daySliderMaxValue = 24.0  * minDays / timeBlock; // default last 30 days
-  double _daySliderValue = 24.0 * minDays / timeBlock ;
+  DateTime _dateFilter;
+  DateTime _timestampFilter; //this value is combination of both timeslider and _dateFilter
+  DateFormat _dateFormat = new DateFormat("MMM dd, yyyy");
 
   LatLng _currentLatLng;
   Event _prevEvent;
 
-  DateTime _timestampSlider; //this value is combination of both timeslider and dayslider
  
   Map<String, dynamic> _locationHistoryFormControllers = {
     'startTime': TextEditingController(text: ""),
@@ -106,12 +109,18 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
   @override
   void initState() {
     super.initState();
-    refreshhGithubData();
+    DateTime now = DateTime.now();
+    _dateFilter = new DateTime(now.year, now.month, now.day);
+    
+    refreshGithubData();
+    refreshReportedData();
+    refreshLocationEvents();
+
 
     // currently I dont have a good way to sync with setting in shared_preferences...
     // so polling it for now
     Timer.periodic(new Duration(seconds: 5), (timer) {
-      refreshhGithubData();
+      refreshGithubData();
     });
     _mapOptions = new MapOptions(
         onPositionChanged: _onPositionChanged,
@@ -142,7 +151,7 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
     });
 
     DateTime today = new DateTime.now();
-    eventStore.load(today.subtract(new Duration(days: 30)));
+    eventStore.load(today.subtract(new Duration(days: 30)), DateTime.now()).then((events) => _events = events);
     eventStore.loadHistoricalLocations();
 
     _checkCurrentUser();
@@ -154,7 +163,7 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
     super.dispose();
   }
 
-  void refreshhGithubData() async {
+  void refreshGithubData() async {
     SharedPreferences prefs = await _prefs;
     _enablePublicData = prefs.getBool("enablePublicData");
     if(!_enablePublicData) {
@@ -225,6 +234,40 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
         });
       });
       break; // no need to go to older date
+    }
+  }
+
+  void refreshReportedData() async {
+    LatLng center = _mapController.center;
+    String startTime = toEventDateTimeFormat(_dateFilter);
+    String endTime = toEventDateTimeFormat(_dateFilter.add(new Duration(days: 1)));
+    String searchUrl = '${ENV.API_HOST}/locations/query?lat=${center.latitude}&lng=${center.longitude}&radius=100&start_time=$startTime&end_time=$endTime';
+    // String searchUrl = '${ENV.API_HOST}/locations/query?lat=41.01322584278608&lng=-73.65536959817105&radius=100';
+    var response = await http.get(searchUrl);
+    print(response);
+    if (response.statusCode == 200) {
+        var locations = json.decode(response.body);
+        print(locations);
+        List<Marker> markers = [];
+        for(var loc in locations) {
+          Marker m = Marker(
+            point: new LatLng(loc['lat'], loc['lng']),
+            builder: (ctx) => new GestureDetector(
+              onTap: (){
+                // _onSelectCaseMarker(ll, "${c.locationName}\n${c.confirmed} Confirmed\n${c.deaths} Deaths\n${c.recovered} Recovered");
+              },
+              child: Icon(
+                Icons.report,
+                color: Colors.redAccent,
+                size: 30.0,
+              ),
+            )
+          );
+          markers.add(m);
+        }
+        setState(() {
+          _reportedLocations = markers;
+        });
     }
   }
 
@@ -365,23 +408,28 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
   }
 
   
-  void _onTimeStampSliderChange(DateTime dt) async {
-    int idx = lowerBound(eventStore.events, dt);
-    if(idx == eventStore.events.length) {
-      idx = eventStore.events.length - 1;
+  void _onTimeStampFilterChange(DateTime dt) async {
+    int idx = lowerBound(_events, dt);
+    if(idx == _events.length) {
+      idx = _events.length - 1;
+      setState(() {
+        _historyLocations = [];
+      });
+    } else {
+      Event event = _events[idx];
+      print(dt);
+      print(event);
+      LatLng ll = new LatLng(event.lat, event.lng);
+      setState(() {
+        _historyLocations = [
+          CircleMarker(
+            point: ll,
+            color: Colors.purple,
+            radius: 5.0
+          )
+        ];
+      });
     }
-    Event event = eventStore.events[idx];
-    LatLng ll = new LatLng(event.lat, event.lng);
-    setState(() {
-      _prevEvent = event;
-      _historyLocations = [
-        CircleMarker(
-          point: ll,
-          color: Colors.purple,
-          radius: 5.0
-        )
-      ];
-    });
   }
 
   int lowerBound(List<Event> events, DateTime dt) {
@@ -401,13 +449,19 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
     return min;
   }
 
-  void _onDateTimeSliderChange(double daySliderValue, double timeSliderValue) {
+  void _onDateTimeSliderChange() {
     setState(() {
-      DateTime today = new DateTime.now();
-      int hoursAgo = (_daySliderMaxValue - _daySliderValue).round() * timeBlock; // 1 min step
-      int minutesAgo = (_timeSliderMaxValue - _timeSliderValue).round(); // 1 min step
-      _timestampSlider = today.subtract(new Duration(minutes: minutesAgo, hours: hoursAgo));
-      _onTimeStampSliderChange(_timestampSlider);
+      // DateTime maxValue = new DateTime.now();
+      // if(maxValue.difference(_dateFilter).inDays > 0){
+      //   maxValue = _dateFilter.add(new Duration(days:1));
+      // } 
+      // int minutesToday = maxValue.difference(_dateFilter).inMinutes;
+      // int minutesFilter = (_timeSliderValue / _timeSliderMaxValue * minutesToday).round(); // 1 min step
+      // _timestampFilter = _dateFilter.add(new Duration(minutes: minutesFilter));
+      // _onTimeStampFilterChange(_timestampFilter);
+      int eventIdx = (_timeSliderValue / _timeSliderMaxValue * _events.length).round(); // 1 min step
+      _timestampFilter = DateTime.parse(_events[eventIdx].timestamp);
+      _onTimeStampFilterChange(_timestampFilter);
     });
   }
 
@@ -427,36 +481,13 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
   }
 
   void _geocodingLocation(LatLng ll) async{
-    var response = await http.get("http://3.226.73.226:8000/geolocation/${ll.latitude}/${ll.longitude}");
+    var response = await http.get("http://3.226.73.226:8080/geolocation/${ll.latitude}/${ll.longitude}");
     if (response.statusCode == 200) {
       String name = json.decode(response.body)["name"];
       _locationHistoryFormControllers["name"].text = name;
     } else {
-      throw Exception('Failed to load album');
+      throw Exception('Failed to load geolocation');
     }
-  }
-
-  void _onAddPreviousLocation(){
-    if(!_enabled) {
-      _askEnableTracking();
-      return;
-    }
-    String message;
-    Event event = _prevEvent;
-    if(event == null){
-      if(eventStore.events.length == 0){
-        util.Dialog.alert(context, 'No history events', 'Please enable tracking in settings page and wait for locations to be recorded to use this feature'); // this should not happen
-        return;
-      } else {
-        event = eventStore.events[eventStore.events.length - 1];
-        message = "TIme slider is not used, using latest known location as historical location";
-      }
-    }
-    LatLng ll = new LatLng(event.lat, event.lng);
-    DateTime dt = DateTime.parse(event.timestamp);
-    _onSelectMarkerManually(ll);
-    _locationHistoryFormControllers["endTime"].text = _dateTimeToFormValue(dt);
-    _onPopupAddLocation();
   }
 
   void _onAddManually(){
@@ -575,6 +606,29 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
     });
   }
 
+  void _updateDateFilter(DateTime d) {
+    setState(() {
+      _dateFilter = d;
+      _onDateTimeSliderChange();
+      
+      refreshLocationEvents();
+      refreshReportedData();
+    });
+  }
+  void refreshLocationEvents(){
+    eventStore.load(_dateFilter, _dateFilter.add(new Duration(days: 1))).then((events) {
+      _events = events;
+      var points = _events.map((e) => LatLng(e.lat, e.lng)).toList();
+      setState(() {
+        _historyEventsPolylines = [Polyline(
+            points: points,
+            strokeWidth: 5.0,
+            color: Color.fromRGBO(22, 190, 66, 0.7)
+          )];
+      });
+    });
+  }
+
   void _onReportTravelHistory () async{
     print(_currentUser);
     if (_currentUser == null) {
@@ -634,6 +688,7 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
   Widget build(BuildContext context){
     _panelHeightOpen = MediaQuery.of(context).size.height * .50;
     _sliderWidth = MediaQuery.of(context).size.width * .70;
+    double notificationWidth = MediaQuery.of(context).size.width * .80;
 
     return Material(
       child: Stack(
@@ -654,7 +709,6 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
             }),
           ),
 
-          // the fab
           Positioned(
             width: MediaQuery.of(context).size.width * .20,
             right: 20.0,
@@ -669,38 +723,65 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
             ),
           ),
           Positioned(
-            left: 20.0,	
-            width: _sliderWidth,
-            bottom: _fabHeight - 20,
-            child: Column(
-              // alignment: Alignment.topCenter,
-              children: <Widget>[ 
-                Slider(	
+            top: 20.0,
+            // right: 20.0,
+            child: Container(
+              // padding: const EdgeInsets.all(10.0),
+              width: notificationWidth,
+              color: Colors.white.withOpacity(0.7),
+              child: Row(
+                  children: <Widget>[
+                    IconButton(
+                      icon: Icon(Icons.keyboard_arrow_left),
+                      onPressed: () => _updateDateFilter(_dateFilter.subtract(new Duration(days:1))),
+                    ),
+                    InkWell(
+                        onTap: () {
+                          showDatePicker(
+                            context: context,
+                            initialDate: DateTime.now(),
+                            firstDate: DateTime(2018),
+                            lastDate: DateTime(2030),
+                            builder: (BuildContext context, Widget child) {
+                              return Theme(
+                                data: ThemeData.dark(),
+                                child: child,
+                              );
+                            },
+                          ).then((d) => _updateDateFilter(d));
+                        },
+                        child: Text(_dateFormat.format(_dateFilter)),
+                    ),
+                    _dateFilter.isBefore(DateTime.now().add(new Duration(days:1))) ? IconButton(
+                      icon: Icon(Icons.keyboard_arrow_right),
+                      onPressed: () => _updateDateFilter(_dateFilter.add(new Duration(days:1))),
+                    ): Container(),
+                    
+                  ],
+                ),
+            )
+          ),
+
+          Positioned(
+            top: 50.0,	
+            right: 20.0,
+            // width: _sliderWidth,
+            bottom: _fabHeight + 70,
+            child: RotatedBox(
+                quarterTurns: 1,
+                child: Slider(	
                   value: _timeSliderValue,
                   min: 0.0,
                   max: _timeSliderMaxValue,
                   divisions: _timeSliderMaxValue.round(), 
-                  label: '${_dateTimeToFormValue(_timestampSlider)}',	
+                  // label: '${_dateTimeToFormValue(_timestampSlider)}',	
                   inactiveColor: Colors.black,
                   onChanged: (double value) {
                     _timeSliderValue = value;
-                    _onDateTimeSliderChange(_daySliderMaxValue, value);
+                    _onDateTimeSliderChange();
                   },
-                ),
-                Slider(	
-                  value: _daySliderValue,
-                  min: 0.0,
-                  max: _daySliderMaxValue,
-                  divisions: _daySliderMaxValue.round(), 
-                  label: '${_timestampSlider.toString().split(".")[0]}',	
-                  inactiveColor: Colors.black,
-                  onChanged: (double value) {
-                    _daySliderValue = value;
-                    _onDateTimeSliderChange(value, _timeSliderValue);
-                  },
-                ),
-              ]
-            ),
+                )
+            )
           ),
         ],
       ),
@@ -732,11 +813,14 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
         // new CircleLayerOptions(circles: _locations),
         // // Small, red circles showing where motionchange:false events fired.
         // new CircleLayerOptions(circles: _stopLocations),
-        new CircleLayerOptions(circles: _currentPosition),
         new MarkerLayerOptions(markers: _caseLocations),
         new MarkerLayerOptions(markers: _caseInfoWindows),
+        new MarkerLayerOptions(markers: _reportedLocations),
         new CircleLayerOptions(circles: _historyLocations),
         new MarkerLayerOptions(markers: _addLocationsFormMarker),
+        new PolylineLayerOptions(
+          polylines: _historyEventsPolylines,
+        ),
         
       ],
     );
@@ -814,7 +898,6 @@ class MapViewState extends State<MapView> with AutomaticKeepAliveClientMixin<Map
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: <Widget>[
             _button("Add current", Icons.gps_fixed, Colors.blue, _onAddThisLocation),
-            _button("Add previous", Icons.gps_fixed, Colors.purple, _onAddPreviousLocation),
             _button("Add manually", Icons.add, Colors.amber, _onAddManually),
             _button("I'm sick", Icons.report, Colors.red, _onReportTravelHistory),
           ],

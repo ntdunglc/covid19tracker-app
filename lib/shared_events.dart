@@ -138,21 +138,24 @@ class EventStore {
     }
     event.id = await db.insert("LocationEvents", event.toMap());
   }
+  Future<List<Event>> refresh(DateTime minTimestamp, DateTime maxTimestamp) async {
+    events = await load(minTimestamp, maxTimestamp);
+  }
   
-  Future<List<Event>> load(DateTime lastTimestamp) async {
+  Future<List<Event>> load(DateTime minTimestamp, DateTime maxTimestamp) async {
     print("[EventStore] loading");
     if(db == null) {
       await open();
     }
-    String lastTimestampStr = toEventDateTimeFormat(lastTimestamp);
+    String minTimestampStr = toEventDateTimeFormat(minTimestamp);
+    String maxTimestampStr = toEventDateTimeFormat(maxTimestamp);
     List<Map> maps = await db.query("LocationEvents",
       columns: ["timestamp", "eventType", "lat", "lng", "content"],
-      where: 'timestamp > ?',
-      whereArgs: [lastTimestampStr],
+      where: 'timestamp > ? AND timestamp < ? AND lat != -1',
+      whereArgs: [minTimestampStr, maxTimestampStr],
       orderBy: "timestamp DESC"
     );
-    events = maps.map((m) => Event.fromMap(m)).toList();
-    return events;
+    return maps.map((m) => Event.fromMap(m)).toList();
   }
 
   void insertHistoricalLocation(HistoricalLocation location) async {

@@ -60,7 +60,7 @@ class EventListState extends State<EventList> with AutomaticKeepAliveClientMixin
         break;
       default:
     }
-    eventStore.load(filterTimeStamp).then((events) {
+    eventStore.refresh(filterTimeStamp, DateTime.now()).then((events) {
       setState(() {//trigger redraw, need to find a better way
       });
     });

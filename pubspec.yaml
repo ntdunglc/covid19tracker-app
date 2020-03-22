@@ -42,6 +42,7 @@ dependencies:
   google_sign_in: ^4.1.4
   # flutter_facebook_login: ^3.0.0 # this plugin conflict with something else and crash the app, so had to clone firebase_ui locally..
   apple_sign_in: ^0.1.0
+  flutter_xlider: ^3.2.0
 
 dev_dependencies:
   flutter_test:
